@@ -57,6 +57,14 @@ def little_compare(num1, num2, key):
 	else:
 		return "you messed up somewhere"
 
+def narrow_pants(pants, filters):
+	for filt in filters:
+		fil = filt.split(', ')
+		for pant in pants.keys():
+			if pants[pant][fil[0]] != fil[1]:
+				pants.pop(pant)
+	return pants
+
 def categorical_pant_list(ref, results):
 	newList = {}
 	for pant in results:

@@ -5,6 +5,7 @@ from django.shortcuts import *
 from clothes.models import *
 from snowflake.functions import *
 from snowflake.vars import *
+from django.views.decorators.csrf import csrf_exempt
 
 def landing(request):
 	return render_to_response('landingPage.html')
@@ -21,16 +22,29 @@ def home(request):
 			r[pant.designer]={pant.style:[pant]}
 	return render_to_response('home.html', {'measurements':r}, context_instance=RequestContext(request))
 
-def results(request, term=None):
+@csrf_exempt
+def results(request):
 	reference_pant = request.session["reference_pant"]
 	flags = request.session["flags"]
-	compare_measurements = {"waist": reference_pant.waist, 
-							"inseam": reference_pant.inseam,
-							"cuff": reference_pant.cuff,
-							"front_rise": reference_pant.front_rise}
-	acceptable_pants = compare_pants(reference_pant, compare_measurements, MOE, flags)
-	translated = categorical_pant_list(reference_pant, acceptable_pants)
-	return render_to_response('templates/results.html', {'pants':translated, 'reference':reference_pant}, context_instance=RequestContext(request))
+	result_set = request.session["result_set"]
+	filters = str(request.POST.get("filter", ""))
+	if filters != "":
+		filters = filters.split(')(')
+		filters[0] = filters[0][1:]
+		filters[-1] = filters[-1][:-1]
+	
+	if result_set == None:
+		compare_measurements = {"waist": reference_pant.waist, 
+								"inseam": reference_pant.inseam,
+								"cuff": reference_pant.cuff,
+								"front_rise": reference_pant.front_rise}
+		acceptable_pants = compare_pants(reference_pant, compare_measurements, MOE, flags)
+		translated = categorical_pant_list(reference_pant, acceptable_pants)
+		request.session["result_set"] = translated.copy()
+	else:
+		translated = narrow_pants(result_set.copy(), filters)
+	
+	return render_to_response('templates/results.html', {'pants':translated, 'reference':reference_pant, 'filters':request.POST.get("filter", "")}, context_instance=RequestContext(request))
 
 def find_reference(request):
 	measurements = str.split(str(request.POST.get('measurements')))
@@ -44,6 +58,8 @@ def find_reference(request):
 	else:
 		request.session["reference_pant"] = reference_pant
 		request.session["flags"] = flags
+		request.session["result_set"] = None
+		request.session["filters"] = []
 		return HttpResponseRedirect(reverse('clothes.views.results'))
 
 def product_info(request, comp):
